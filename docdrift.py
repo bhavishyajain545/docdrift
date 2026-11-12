@@ -82,12 +82,21 @@ def extract_tags(paths: list[str], tag: str, skip_tests: bool) -> dict[str, set[
     return found
 
 
-FLAG_PATTERN = re.compile(
-    r'\.(?:Persistent)?Flags\(\)\.\w+?(?:VarP?|P)?\(\s*(?:&[\w.\[\]]+\s*,\s*)?"([A-Za-z0-9][\w.-]*)"'
+# Flag definitions in stdlib flag, pflag and cobra all look like
+#   <receiver>.<Type>[Var][P]("name", ...)  or  <receiver>.<Type>Var(&target, "name", ...)
+# where <receiver> is `flag`, a flag set variable or `cmd.Flags()`. Matching on the typed
+# method name keeps constructors such as NewFlagSet("name", ...) out of the results.
+FLAG_TYPES = (
+    "Bool", "String", "Int", "Int8", "Int16", "Int32", "Int64", "Uint", "Uint8", "Uint16", "Uint32",
+    "Uint64", "Float32", "Float64", "Duration", "Count", "IP", "IPMask", "IPNet", "BytesHex",
+    "StringSlice", "StringArray", "StringToString", "StringToInt", "IntSlice", "Int32Slice",
+    "Int64Slice", "UintSlice", "Float32Slice", "Float64Slice", "BoolSlice", "DurationSlice",
 )
-# stdlib flag.String / flag.StringVar / flagset.BoolVar(...). NewFlagSet("name", ...) names a
-# flag set, not a flag, so it is excluded explicitly.
-FLAG_PATTERN_STD = re.compile(r'\bflag\.(?!NewFlagSet\b)\w+(?:Var)?\(\s*(?:&[\w.\[\]]+\s*,\s*)?"([A-Za-z0-9][\w.-]*)"')
+FLAG_PATTERN = re.compile(
+    r"\.(?:" + "|".join(FLAG_TYPES) + r")(?:Var)?P?\(\s*(?:&[\w.\[\]()]+\s*,\s*)?\"([A-Za-z0-9][\w.-]*)\""
+)
+# generic Var(value, "name", usage) / VarP(value, "name", "n", usage)
+FLAG_PATTERN_VAR = re.compile(r'\.VarP?\(\s*[^,()]+(?:\([^)]*\))?\s*,\s*"([A-Za-z0-9][\w.-]*)"')
 
 
 def extract_flags(paths: list[str], skip_tests: bool) -> dict[str, set[str]]:
@@ -97,7 +106,7 @@ def extract_flags(paths: list[str], skip_tests: bool) -> dict[str, set[str]]:
         if skip_tests and f.endswith("_test.go"):
             continue
         text = read(f)
-        for pat in (FLAG_PATTERN, FLAG_PATTERN_STD):
+        for pat in (FLAG_PATTERN, FLAG_PATTERN_VAR):
             for m in pat.finditer(text):
                 found.setdefault(m.group(1), set()).add(f)
     return found

@@ -55,7 +55,10 @@ func setup() {
 ''')
             names = docdrift.extract_flags([src], skip_tests=True)
             # "openreports" names a flag set, not a flag, and must not be reported
-            self.assertEqual(set(names), {"service-name", "verbose", "port", "kubeconfig", "openreportsEnabled"})
+            self.assertEqual(
+                set(names),
+                {"service-name", "verbose", "reconcile-interval", "port", "kubeconfig", "openreportsEnabled"},
+            )
 
 
 class CMKeysTest(unittest.TestCase):
