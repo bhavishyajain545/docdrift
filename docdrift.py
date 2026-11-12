@@ -92,11 +92,15 @@ FLAG_TYPES = (
     "StringSlice", "StringArray", "StringToString", "StringToInt", "IntSlice", "Int32Slice",
     "Int64Slice", "UintSlice", "Float32Slice", "Float64Slice", "BoolSlice", "DurationSlice",
 )
+# The receiver must look like a flag set (`flag`, `pflag`, `fs`, `msfs`, `flagset`, `cmd.Flags()`,
+# `cmd.PersistentFlags()`), otherwise attribute.String("key", v) or zap.String("err", e) would
+# be reported as flags.
+FLAG_RECEIVER = r"(?:\b(?:[A-Za-z_]\w*\.)*(?:[A-Za-z_]*[Ff]lags?[A-Za-z_]*(?:\(\))?|[a-z]*fs))"
 FLAG_PATTERN = re.compile(
-    r"\.(?:" + "|".join(FLAG_TYPES) + r")(?:Var)?P?\(\s*(?:&[\w.\[\]()]+\s*,\s*)?\"([A-Za-z0-9][\w.-]*)\""
+    FLAG_RECEIVER + r"\.(?:" + "|".join(FLAG_TYPES) + r")(?:Var)?P?\(\s*(?:&[\w.\[\]()]+\s*,\s*)?\"([A-Za-z0-9][\w.-]*)\""
 )
 # generic Var(value, "name", usage) / VarP(value, "name", "n", usage)
-FLAG_PATTERN_VAR = re.compile(r'\.VarP?\(\s*[^,()]+(?:\([^)]*\))?\s*,\s*"([A-Za-z0-9][\w.-]*)"')
+FLAG_PATTERN_VAR = re.compile(FLAG_RECEIVER + r'\.VarP?\(\s*[^,()]+(?:\([^)]*\))?\s*,\s*"([A-Za-z0-9][\w.-]*)"')
 
 
 def extract_flags(paths: list[str], skip_tests: bool) -> dict[str, set[str]]:
@@ -138,16 +142,22 @@ def docs_text(paths: list[str]) -> str:
     return "\n".join(read(f) for f in iter_files(paths, DOC_EXT))
 
 
-def missing_in_docs(names: dict[str, set[str]], docs: str) -> list[str]:
+def missing_in_docs(names: dict[str, set[str]], docs: str, flags: bool = False) -> list[str]:
     """An option counts as documented when its exact name appears as a whole token.
 
     A name followed by a dotted continuation (``reposerver.grpc`` inside
     ``reposerver.grpc.max.size``) is only a prefix, not a match; a trailing
-    sentence period (``... the port.``) still counts.
+    sentence period (``... the port.``) still counts. A name preceded by a dot
+    (``metricsUtilization.metricsServer``) is a nested field path and counts.
+    For flags, ``--name`` also counts, since that is how docs spell them.
     """
     out = []
     for name in sorted(names):
-        if not re.search(r"(?<![\w.-])" + re.escape(name) + r"(?![\w-])(?!\.\w)", docs):
+        escaped = re.escape(name)
+        found = re.search(r"(?<![\w-])" + escaped + r"(?![\w-])(?!\.\w)", docs)
+        if not found and flags:
+            found = re.search(r"--" + escaped + r"(?![\w-])", docs)
+        if not found:
             out.append(name)
     return out
 
@@ -182,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         names = extract_cmkeys(args.paths, args.configmap)
 
     docs = docs_text(args.docs)
-    missing = missing_in_docs(names, docs)
+    missing = missing_in_docs(names, docs, flags=(args.cmd == "flags"))
 
     print(f"{len(names)} options found in code, {len(missing)} missing from docs")
     for name in missing:

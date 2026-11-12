@@ -51,13 +51,19 @@ func setup() {
     flag.StringVar(&kubeconfig, "kubeconfig", "", "x")
     flagset := flag.NewFlagSet("openreports", flag.ExitOnError)
     flagset.BoolVar(&enabled, "openreportsEnabled", false, "x")
+    msfs := fs.FlagSet("policy server")
+    msfs.DurationVar(&o.Interval, "apiservicereconcileinterval", 10*time.Second, "x")
+    // not flags: structured logging / tracing attributes
+    logger.Error(err, "failed", zap.String("err", "boom"))
+    span.SetAttributes(attribute.String("podName", pod.Name))
 }
 ''')
             names = docdrift.extract_flags([src], skip_tests=True)
-            # "openreports" names a flag set, not a flag, and must not be reported
+            # "openreports" names a flag set, "err"/"podName" are log attributes: neither is a flag
             self.assertEqual(
                 set(names),
-                {"service-name", "verbose", "reconcile-interval", "port", "kubeconfig", "openreportsEnabled"},
+                {"service-name", "verbose", "reconcile-interval", "port", "kubeconfig", "openreportsEnabled",
+                 "apiservicereconcileinterval"},
             )
 
 
@@ -98,6 +104,14 @@ class MatchingTest(unittest.TestCase):
         missing = docdrift.missing_in_docs(names, docs)
         # "reposerver.grpc" is only a prefix of a documented key and "ports" is not "port"
         self.assertEqual(missing, ["ports", "reposerver.grpc"])
+
+    def test_nested_field_path_and_flag_spelling(self):
+        docs = "Set `metricsUtilization.metricsServer` (deprecated). Run with `--dry-run` to preview."
+        names = {"metricsServer": set(), "dry-run": set(), "run": set()}
+        # a nested field path documents its last segment
+        self.assertEqual(docdrift.missing_in_docs(names, docs), ["dry-run", "run"])
+        # for flags, the --name spelling counts; "run" is still not "--dry-run"
+        self.assertEqual(docdrift.missing_in_docs(names, docs, flags=True), ["run"])
 
     def test_cli_exit_codes(self):
         with tempfile.TemporaryDirectory() as d:
