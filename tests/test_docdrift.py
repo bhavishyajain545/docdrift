@@ -49,10 +49,13 @@ func setup() {
     fs.DurationVar(&o.Interval, "reconcile-interval", 10*time.Second, "x")
     flag.Int("port", 8080, "x")
     flag.StringVar(&kubeconfig, "kubeconfig", "", "x")
+    flagset := flag.NewFlagSet("openreports", flag.ExitOnError)
+    flagset.BoolVar(&enabled, "openreportsEnabled", false, "x")
 }
 ''')
             names = docdrift.extract_flags([src], skip_tests=True)
-            self.assertEqual(set(names), {"service-name", "verbose", "port", "kubeconfig"})
+            # "openreports" names a flag set, not a flag, and must not be reported
+            self.assertEqual(set(names), {"service-name", "verbose", "port", "kubeconfig", "openreportsEnabled"})
 
 
 class CMKeysTest(unittest.TestCase):

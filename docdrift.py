@@ -85,7 +85,9 @@ def extract_tags(paths: list[str], tag: str, skip_tests: bool) -> dict[str, set[
 FLAG_PATTERN = re.compile(
     r'\.(?:Persistent)?Flags\(\)\.\w+?(?:VarP?|P)?\(\s*(?:&[\w.\[\]]+\s*,\s*)?"([A-Za-z0-9][\w.-]*)"'
 )
-FLAG_PATTERN_STD = re.compile(r'\bflag\.\w+(?:Var)?\(\s*(?:&[\w.\[\]]+\s*,\s*)?"([A-Za-z0-9][\w.-]*)"')
+# stdlib flag.String / flag.StringVar / flagset.BoolVar(...). NewFlagSet("name", ...) names a
+# flag set, not a flag, so it is excluded explicitly.
+FLAG_PATTERN_STD = re.compile(r'\bflag\.(?!NewFlagSet\b)\w+(?:Var)?\(\s*(?:&[\w.\[\]]+\s*,\s*)?"([A-Za-z0-9][\w.-]*)"')
 
 
 def extract_flags(paths: list[str], skip_tests: bool) -> dict[str, set[str]]:
